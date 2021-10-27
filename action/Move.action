@@ -1,6 +1,6 @@
 # Goal parameters
 string direction
-uint32 speed
+float32 speed
 float32 distance
 ---
 # Result parameters

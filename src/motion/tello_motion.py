@@ -6,7 +6,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import actionlib
-from tello_tools.msg import MoveAction, MoveGoal, MoveFeedback, MoveResult
+from tello_tools.msg import MoveAction, MoveFeedback, MoveResult
 from simple_pid import PID
 from geometry_msgs.msg import Twist, Pose
 from nav_msgs.msg import Odometry
@@ -15,6 +15,7 @@ from std_msgs.msg import Empty, String
 consigne = []
 entree = []
 sortie = []
+draw = False
 
 
 class Motion:
@@ -23,12 +24,13 @@ class Motion:
         """
         Constructeur
         """
-        self.kp = 0.9
-        self.ki = 0.9
-        self.kd = 0.9
+        self.kp = 1
+        self.ki = 1
+        self.kd = 1
         self.pose = Pose()
         self.velocity = Twist()
         self.feedback = MoveFeedback()
+        self.fig, self.ax = plt.subplots()
         self.result = MoveResult()
         self.odomTopic = "/tello/odom"
         self.takeoffTopic = "/tello/takeoff"
@@ -63,7 +65,8 @@ class Motion:
     def moveL(self, goal):
         """
         """
-        print(goal)
+        rospy.loginfo(goal)
+        success = True
         velocity_msg = Twist()
         x0 = self.pose.position.x
         #print("x0 :" +str(x0))
@@ -95,31 +98,41 @@ class Motion:
 
         while True :
             rospy.loginfo("Mouvement linéaire du drone")
+            if self.move_action.is_preempt_requested():
+                rospy.loginfo('%s: Preempted' % self._action_name)
+                self._as.set_preempted()
+                success = False
+                break
             #print("Velocity :" + str(velocity_msg.linear.y))
             consigne.append(velocity_msg.linear.y)
             velocity_pid = self.pid(velocity_msg)
             entree.append(velocity_pid.linear.y)
             sortie.append(self.velocity.linear.y)
-            self.pub_cmdVel.publish(velocity_pid)
+            self.pub_cmdVel.publish(velocity_msg)
             loop_rate.sleep()
             distance_moved = abs(math.sqrt((self.pose.position.x-x0)**2 + (self.pose.position.y-y0)**2 + (self.pose.position.z-z0)**2))
+            self.feedback.distance_moved = distance_moved
+            self.move_action.publish_feedback(self.feedback)
             print("Distance moved : "+ str(distance_moved))
             if not(distance_moved < goal.distance) :
                 rospy.loginfo("Position atteinte")
                 break
-
-        print(self.pose)
+        rospy.loginfo(self.pose)
+        time = range(len(consigne))
+        self.ax.plot(time, consigne, c="blue", label="consigne")
+        self.ax.plot(time, entree, c="red", label="entree pid")
+        self.ax.plot(time, sortie, c="black", label="odom")
+        plt.savefig("diag.png")
         velocity_msg.linear.x=0
         velocity_msg.linear.y=0
         velocity_msg.linear.z=0
         self.pub_cmdVel.publish(velocity_msg)
-        time = range(len(consigne))
-        plt.figure()
-        plt.plot(time, consigne, c="blue", label="consigne")
-        plt.plot(time, entree, c="red", label="entree pid")
-        plt.plot(time, sortie, c="black", label="odom")
-        plt.legend()
-        plt.show()
+        if success :
+            draw = True
+            print("Draw")
+            self.result.status = "Position atteinte"
+            self.result.pose = self.pose
+            self.move_action.set_succeeded(self.result)
 
     def pid(self, setPoint) :
         """
@@ -144,18 +157,7 @@ class Motion:
 def main():
     rospy.init_node("tello_motion", anonymous=True)
     motion = Motion()
-    #speed = Twist()
-    #print(speed)
-    #print("------------------------")
-    #print(motion.pid(speed))
-    #motion.totakeoff()
-    #time.sleep(2)
-    #rospy.sleep(10)
-    #motion.moveL("forward", 0.5, 0.8)
-    #time.sleep(1)
-    #motion.moveL("right", 0.5, 0.5)
-    #time.sleep(1)
-    #motion.toland()
+    motion.totakeoff()  
     rospy.spin()
 
 if __name__ == '__main__':
