@@ -3,10 +3,18 @@
 import rospy
 import time
 import math
+import matplotlib.pyplot as plt
+import numpy as np
+import actionlib
+from tello_tools.msg import MoveAction, MoveGoal, MoveFeedback, MoveResult
 from simple_pid import PID
 from geometry_msgs.msg import Twist, Pose
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Empty, String
+
+consigne = []
+entree = []
+sortie = []
 
 
 class Motion:
@@ -15,15 +23,19 @@ class Motion:
         """
         Constructeur
         """
-        self.kp = 0.2
-        self.ki = 0.1
-        self.kd = 0.3
+        self.kp = 0.9
+        self.ki = 0.9
+        self.kd = 0.9
         self.pose = Pose()
         self.velocity = Twist()
+        self.feedback = MoveFeedback()
+        self.result = MoveResult()
         self.odomTopic = "/tello/odom"
         self.takeoffTopic = "/tello/takeoff"
         self.landTopic = "/tello/land"
         self.cmdVelTopic = "/tello/cmd_vel"
+        self.move_action = actionlib.SimpleActionServer("basic_move", MoveAction, execute_cb=self.moveL, auto_start=False)
+        self.move_action.start()
         self.pub_cmdVel = rospy.Publisher(self.cmdVelTopic, Twist, queue_size=1)
         self.pub_takeOff = rospy.Publisher(self.takeoffTopic, Empty, queue_size=1, latch=False)
         self.pub_land = rospy.Publisher(self.landTopic, Empty, queue_size=1, latch=False)
@@ -48,35 +60,35 @@ class Motion:
         #rospy.sleep(3)
         """
         """
-    def moveL(self, direction, speed, distance):
+    def moveL(self, goal):
         """
         """
-        print(self.pose)
+        print(goal)
         velocity_msg = Twist()
         x0 = self.pose.position.x
-        print("x0 :" +str(x0))
+        #print("x0 :" +str(x0))
         y0 = self.pose.position.y
-        print("y0 :" +str(y0))
+        #print("y0 :" +str(y0))
         z0 = self.pose.position.z
-        print("z0 :" +str(z0))
-        if ( direction == "forward" ) :
+        #print("z0 :" +str(z0))
+        if (goal.direction == "forward" ) :
             print("Forward move")
-            velocity_msg.linear.y = abs(speed)
-        elif ( direction == "backward") :
+            velocity_msg.linear.y = abs(goal.speed)
+        elif (goal.direction == "backward") :
             print("Backward move")
-            velocity_msg.linear.y = -abs(speed)
-        elif ( direction == "right") :
+            velocity_msg.linear.y = -abs(goal.speed)
+        elif (goal.direction == "right") :
             print("Right move") 
-            velocity_msg.linear.x = abs(speed)
-        elif (direction == "left") :
+            velocity_msg.linear.x = abs(goal.speed)
+        elif (goal.direction == "left") :
             print("Left move")
-            velocity_msg.linear.x = -abs(speed)
-        elif (direction == "up") :
+            velocity_msg.linear.x = -abs(goal.speed)
+        elif (goal.direction == "up") :
             print("Up move")
-            velocity_msg.linear.z = abs(speed)
-        elif (direction == "down") :
+            velocity_msg.linear.z = abs(goal.speed)
+        elif (goal.direction == "down") :
             print("Down move") 
-            velocity_msg.linear.z = -abs(speed)
+            velocity_msg.linear.z = -abs(goal.speed)
 
         distance_moved = 0.0
         loop_rate = rospy.Rate(10)
@@ -84,12 +96,15 @@ class Motion:
         while True :
             rospy.loginfo("Mouvement linéaire du drone")
             #print("Velocity :" + str(velocity_msg.linear.y))
+            consigne.append(velocity_msg.linear.y)
             velocity_pid = self.pid(velocity_msg)
+            entree.append(velocity_pid.linear.y)
+            sortie.append(self.velocity.linear.y)
             self.pub_cmdVel.publish(velocity_pid)
             loop_rate.sleep()
             distance_moved = abs(math.sqrt((self.pose.position.x-x0)**2 + (self.pose.position.y-y0)**2 + (self.pose.position.z-z0)**2))
             print("Distance moved : "+ str(distance_moved))
-            if not(distance_moved < distance) :
+            if not(distance_moved < goal.distance) :
                 rospy.loginfo("Position atteinte")
                 break
 
@@ -98,6 +113,13 @@ class Motion:
         velocity_msg.linear.y=0
         velocity_msg.linear.z=0
         self.pub_cmdVel.publish(velocity_msg)
+        time = range(len(consigne))
+        plt.figure()
+        plt.plot(time, consigne, c="blue", label="consigne")
+        plt.plot(time, entree, c="red", label="entree pid")
+        plt.plot(time, sortie, c="black", label="odom")
+        plt.legend()
+        plt.show()
 
     def pid(self, setPoint) :
         """
@@ -126,14 +148,14 @@ def main():
     #print(speed)
     #print("------------------------")
     #print(motion.pid(speed))
-    motion.totakeoff()
-    time.sleep(2)
-    # #rospy.sleep(10)
-    motion.moveL("forward", 0.5, 0.8)
-    time.sleep(1)
-    # motion.moveL("right", 0.5, 0.5)
-    # time.sleep(1)
-    motion.toland()
+    #motion.totakeoff()
+    #time.sleep(2)
+    #rospy.sleep(10)
+    #motion.moveL("forward", 0.5, 0.8)
+    #time.sleep(1)
+    #motion.moveL("right", 0.5, 0.5)
+    #time.sleep(1)
+    #motion.toland()
     rospy.spin()
 
 if __name__ == '__main__':

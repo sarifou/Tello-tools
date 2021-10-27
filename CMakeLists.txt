@@ -13,6 +13,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   geometry_msgs
   nav_msgs
+  actionlib
+  actionlib_msgs
   message_generation
 )
 
@@ -64,11 +66,10 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate actions in the 'action' folder
-# add_action_files(
-#   FILES
-#   Action1.action
-#   Action2.action
-# )
+add_action_files(
+  FILES
+  Move.action
+)
 
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
@@ -76,6 +77,7 @@ generate_messages(
   std_msgs
   geometry_msgs
   nav_msgs
+  actionlib_msgs
 )
 
 ################################################

@@ -1,0 +1,11 @@
+# Goal parameters
+string direction
+uint32 speed
+float32 distance
+---
+# Result parameters
+string status
+geometry_msgs/Pose pose
+---
+# Feedback parameters
+float32 distance_moved
